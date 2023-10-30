@@ -51,11 +51,19 @@ public class SAMLCallback extends Action {
 
                 if (saml2Profile.isPresent()) {
                     Map<String, Object> properties = getMapperResult((BasicUserProfile)saml2Profile.get());
+                    String emailAddress = "";
+                    for (Map.Entry<String, Object> entry : properties.entrySet()) {
+                        if (entry.getKey().toString().indexOf("emailaddress") > -1) {
+                            emailAddress = entry.getValue().toString();
+                        }
+                    }
+                    properties.put("email", emailAddress);
 
                     for (MapperConfig mapper : settings.getMappers()) {
                         try {
                             jahiaAuthMapperService.executeMapper(httpServletRequest.getSession().getId(), mapper, properties);
-                        } catch (JahiaAuthException e) {
+                        } catch (Exception e) {
+                            logger.error("Could not map properties", e);
                             return false;
                         }
                     }
@@ -79,15 +87,20 @@ public class SAMLCallback extends Action {
     private Map<String, Object> getMapperResult(BasicUserProfile saml2Profile) {
         Map<String, Object> properties = new HashMap<>();
         for (Map.Entry<String, Object> entry : saml2Profile.getAttributes().entrySet()) {
+            String entryKey = entry.getKey();
             if (entry.getValue() instanceof List) {
                 final List<?> l = (List<?>) entry.getValue();
                 if (l.size() == 1) {
-                    properties.put(entry.getKey(), l.get(0));
+                    String entryValue = l.get(0).toString();
+                    if (entryKey.indexOf("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier") > -1) {
+                        entryValue = entryValue.replace("|", "_");
+                    }
+                    properties.put(entryKey, entryValue);
                 } else {
-                    properties.put(entry.getKey(), entry.getValue());
+                    properties.put(entryKey, entry.getValue());
                 }
             } else {
-                properties.put(entry.getKey(), entry.getValue());
+                properties.put(entryKey, entry.getValue());
             }
         }
         return properties;
